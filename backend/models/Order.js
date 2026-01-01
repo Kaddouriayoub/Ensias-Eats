@@ -1,0 +1,203 @@
+import mongoose from 'mongoose';
+
+const orderItemSchema = new mongoose.Schema({
+  meal: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Meal',
+    required: true
+  },
+  quantity: {
+    type: Number,
+    required: true,
+    min: 1,
+    default: 1
+  },
+  price: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  // Snapshot of nutritional info at time of order
+  nutritionalInfo: {
+    calories: { type: Number, required: true },
+    proteins: { type: Number, required: true },
+    carbohydrates: { type: Number, required: true }
+  }
+}, { _id: false });
+
+const orderSchema = new mongoose.Schema({
+  // Student/User Reference
+  student: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User',
+    required: true
+  },
+
+  // Order Items
+  items: {
+    type: [orderItemSchema],
+    required: true,
+    validate: {
+      validator: function(items) {
+        return items && items.length > 0;
+      },
+      message: 'Order must contain at least one item'
+    }
+  },
+
+  // Order Number (for easy identification)
+  orderNumber: {
+    type: String,
+    unique: true,
+    required: true
+  },
+
+  // Total Calculations
+  totalPrice: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  totalCalories: {
+    type: Number,
+    required: true,
+    min: 0
+  },
+  totalProteins: {
+    type: Number,
+    default: 0
+  },
+  totalCarbs: {
+    type: Number,
+    default: 0
+  },
+
+  // Pickup Information
+  pickupTimeSlot: {
+    type: Date,
+    required: true
+  },
+  pickupTimeEnd: {
+    type: Date,
+    required: true
+  },
+
+  // Order Status
+  status: {
+    type: String,
+    enum: ['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'],
+    default: 'pending'
+  },
+
+  // Payment Information
+  paymentMethod: {
+    type: String,
+    enum: ['wallet', 'cash_on_delivery'],
+    required: true
+  },
+  paymentStatus: {
+    type: String,
+    enum: ['pending', 'paid', 'refunded'],
+    default: 'pending'
+  },
+
+  // QR Code for collection
+  qrCode: {
+    type: String,
+    default: null
+  },
+
+  // Collection Information
+  collectedAt: {
+    type: Date,
+    default: null
+  },
+  collectedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User', // Cafeteria staff who validated collection
+    default: null
+  },
+
+  // Cancellation Information
+  cancelledAt: {
+    type: Date,
+    default: null
+  },
+  cancellationReason: {
+    type: String,
+    default: null
+  },
+
+  // Additional notes
+  specialInstructions: {
+    type: String,
+    maxlength: 200,
+    default: ''
+  },
+
+  // Notification status
+  notificationSent: {
+    ready: { type: Boolean, default: false },
+    reminder: { type: Boolean, default: false }
+  }
+}, {
+  timestamps: true
+});
+
+// Indexes for faster queries
+orderSchema.index({ student: 1, createdAt: -1 });
+orderSchema.index({ status: 1, pickupTimeSlot: 1 });
+orderSchema.index({ orderNumber: 1 });
+orderSchema.index({ pickupTimeSlot: 1 });
+
+// Pre-save middleware to generate order number
+orderSchema.pre('save', async function(next) {
+  if (this.isNew && !this.orderNumber) {
+    const date = new Date();
+    const timestamp = date.getTime().toString().slice(-6);
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    this.orderNumber = `ORD-${timestamp}${random}`;
+  }
+  next();
+});
+
+// Method to calculate totals from items
+orderSchema.methods.calculateTotals = function() {
+  this.totalPrice = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+  this.totalCalories = this.items.reduce((sum, item) => sum + (item.nutritionalInfo.calories * item.quantity), 0);
+  this.totalProteins = this.items.reduce((sum, item) => sum + (item.nutritionalInfo.proteins * item.quantity), 0);
+  this.totalCarbs = this.items.reduce((sum, item) => sum + (item.nutritionalInfo.carbohydrates * item.quantity), 0);
+};
+
+// Method to check if order can be cancelled
+orderSchema.methods.canBeCancelled = function() {
+  return ['pending', 'confirmed'].includes(this.status);
+};
+
+// Method to check if order is ready for pickup
+orderSchema.methods.isReadyForPickup = function() {
+  return this.status === 'ready';
+};
+
+// Method to mark order as collected
+orderSchema.methods.markAsCollected = async function(staffId) {
+  this.status = 'completed';
+  this.collectedAt = Date.now();
+  this.collectedBy = staffId;
+  return await this.save();
+};
+
+// Method to cancel order
+orderSchema.methods.cancelOrder = async function(reason) {
+  if (!this.canBeCancelled()) {
+    throw new Error('Order cannot be cancelled at this stage');
+  }
+  this.status = 'cancelled';
+  this.cancelledAt = Date.now();
+  this.cancellationReason = reason;
+  return await this.save();
+};
+
+const Order = mongoose.model('Order', orderSchema);
+
+export default Order;

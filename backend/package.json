@@ -1,0 +1,37 @@
+{
+  "name": "ensias-eats-backend",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "nodemon server.js",
+    "seed": "node seeds/seed.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "ensias",
+    "cafeteria",
+    "nutrition",
+    "ordering"
+  ],
+  "author": "NUTRI-LOGIC Team",
+  "license": "ISC",
+  "description": "ENSIAS Eats - Smart campus cafeteria management system",
+  "dependencies": {
+    "@azure/msal-node": "^3.8.4",
+    "bcryptjs": "^3.0.3",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.3",
+    "express": "^5.2.1",
+    "express-validator": "^7.3.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^8.21.0",
+    "passport": "^0.7.0",
+    "passport-azure-ad": "^4.3.5",
+    "qrcode": "^1.5.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.11"
+  }
+}
