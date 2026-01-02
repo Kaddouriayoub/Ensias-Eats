@@ -11,6 +11,10 @@ import mealRoutes from './routes/mealRoutes.js';
 import orderRoutes from './routes/orderRoutes.js';
 import walletRoutes from './routes/walletRoutes.js';
 import timeSlotRoutes from './routes/timeSlotRoutes.js';
+import wellnessRoutes from './routes/wellnessRoutes.js';
+import externalMealRoutes from './routes/externalMealRoutes.js';
+import adminRoutes from './routes/adminRoutes.js';
+import staffRoutes from './routes/staffRoutes.js';
 
 // Load environment variables
 dotenv.config();
@@ -29,6 +33,13 @@ app.use(cors({
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+app.use((req, res, next) => {
+  console.log(`📨 ${req.method} ${req.path}`);
+  console.log(`📨 Full URL: ${req.url}`);
+  console.log(`📨 Original URL: ${req.originalUrl}`);
+  next();
+});
 
 // Basic route for testing
 app.get('/', (req, res) => {
@@ -49,12 +60,20 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-app.use('/api/auth', authRoutes);
+// API Routes
+app.use('/api/auth', (req, res, next) => {
+  console.log('🎯 Request hitting /api/auth:', req.method, req.path);
+  next();
+}, authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/timeslots', timeSlotRoutes);
+app.use('/api/wellness', wellnessRoutes);
+app.use('/api/external-meals', externalMealRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/staff', staffRoutes);
 
 // 404 handler
 app.use((req, res) => {

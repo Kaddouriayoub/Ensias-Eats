@@ -16,7 +16,9 @@ const getMsalClient = () => {
     const msalConfig = {
       auth: {
         clientId: process.env.AZURE_CLIENT_ID,
-        authority: `https://login.microsoftonline.com/${process.env.AZURE_TENANT_ID}`,
+        // Use 'organizations' to allow any organizational account (multi-tenant)
+        // This allows UM5 users from any UM5 tenant to sign in
+        authority: 'https://login.microsoftonline.com/organizations',
         clientSecret: process.env.AZURE_CLIENT_SECRET
       }
     };
@@ -39,7 +41,10 @@ const generateToken = (userId) => {
 export const getMicrosoftLoginUrl = asyncHandler(async (req, res) => {
   const authCodeUrlParameters = {
     scopes: ['user.read', 'email', 'profile'],
-    redirectUri: process.env.AZURE_REDIRECT_URI
+    redirectUri: process.env.AZURE_REDIRECT_URI,
+    // Force consent prompt for multi-tenant apps
+    // This allows users to consent to the app on first login
+    prompt: 'consent'
   };
 
   try {

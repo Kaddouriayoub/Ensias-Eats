@@ -87,6 +87,36 @@ const userSchema = new mongoose.Schema({
   lastIntakeReset: {
     type: Date,
     default: Date.now
+  },
+
+  // Account Suspension (Admin Feature)
+  isSuspended: {
+    type: Boolean,
+    default: false
+  },
+  suspendedAt: {
+    type: Date
+  },
+  suspendedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  },
+  suspensionReason: {
+    type: String
+  },
+
+  // Activity Tracking
+  lastActiveAt: {
+    type: Date,
+    default: Date.now
+  },
+  totalOrders: {
+    type: Number,
+    default: 0
+  },
+  totalSpent: {
+    type: Number,
+    default: 0
   }
 }, {
   timestamps: true

@@ -1,21 +1,26 @@
 import QRCode from 'qrcode';
-import { Order, Meal, User, Wallet, Transaction, TimeSlot } from '../models/index.js';
+import { Order, Meal, User, Wallet, Transaction, TimeSlot, WellnessTracking } from '../models/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { ErrorResponse } from '../middleware/errorHandler.js';
 
 // @desc    Create new order
 // @route   POST /api/orders
 // @access  Private (student)
-export const createOrder = asyncHandler(async (req, res) => {
+const createOrder = asyncHandler(async (req, res) => {
+  console.log('=== CREATE ORDER REQUEST ===');
+  console.log('req.body:', JSON.stringify(req.body, null, 2));
+  console.log('req.user:', req.user);
+
   const { items, pickupTimeSlot, paymentMethod, specialInstructions } = req.body;
 
   if (!items || items.length === 0) {
     throw new ErrorResponse('Please add items to your order', 400);
   }
 
-  if (!pickupTimeSlot) {
-    throw new ErrorResponse('Please select a pickup time slot', 400);
-  }
+  // Time slot is now optional for testing
+  // if (!pickupTimeSlot) {
+  //   throw new ErrorResponse('Please select a pickup time slot', 400);
+  // }
 
   // Get user with wallet
   const user = await User.findById(req.user.id).populate('wallet');
@@ -67,14 +72,20 @@ export const createOrder = asyncHandler(async (req, res) => {
     totalCarbs += meal.nutritionalInfo.carbohydrates * quantity;
   }
 
-  // Parse pickup time
-  const pickupStart = new Date(pickupTimeSlot);
-  const pickupEnd = new Date(pickupStart.getTime() + 30 * 60000); // 30 minutes window
+  // Parse pickup time (if provided)
+  let pickupStart = null;
+  let pickupEnd = null;
+  let timeSlot = null;
 
-  // Check time slot availability
-  const timeSlot = await TimeSlot.findById(req.body.timeSlotId);
-  if (timeSlot && !timeSlot.isAvailableForBooking()) {
-    throw new ErrorResponse('Selected time slot is full', 400);
+  if (pickupTimeSlot) {
+    pickupStart = new Date(pickupTimeSlot);
+    pickupEnd = new Date(pickupStart.getTime() + 30 * 60000); // 30 minutes window
+
+    // Check time slot availability
+    timeSlot = await TimeSlot.findById(req.body.timeSlotId);
+    if (timeSlot && !timeSlot.isAvailableForBooking()) {
+      throw new ErrorResponse('Selected time slot is full', 400);
+    }
   }
 
   // Validate payment method
@@ -93,7 +104,7 @@ export const createOrder = asyncHandler(async (req, res) => {
   }
 
   // Create order
-  const order = await Order.create({
+  console.log('Creating order with data:', {
     student: user._id,
     items: orderItems,
     totalPrice,
@@ -102,11 +113,31 @@ export const createOrder = asyncHandler(async (req, res) => {
     totalCarbs,
     pickupTimeSlot: pickupStart,
     pickupTimeEnd: pickupEnd,
-    paymentMethod,
-    paymentStatus: paymentMethod === 'wallet' ? 'pending' : 'pending',
-    specialInstructions: specialInstructions || '',
-    status: 'pending'
+    paymentMethod
   });
+
+  let order;
+  try {
+    order = await Order.create({
+      student: user._id,
+      items: orderItems,
+      totalPrice,
+      totalCalories,
+      totalProteins,
+      totalCarbs,
+      pickupTimeSlot: pickupStart,
+      pickupTimeEnd: pickupEnd,
+      paymentMethod,
+      paymentStatus: paymentMethod === 'wallet' ? 'pending' : 'pending',
+      specialInstructions: specialInstructions || '',
+      status: 'pending'
+    });
+    console.log('Order created successfully:', order._id);
+  } catch (error) {
+    console.error('Order creation failed:', error);
+    console.error('Validation errors:', error.errors);
+    throw new ErrorResponse(error.message || 'Failed to create order', 400);
+  }
 
   // Generate QR code
   const qrData = JSON.stringify({
@@ -140,6 +171,31 @@ export const createOrder = asyncHandler(async (req, res) => {
     // Update user's monthly spending
     user.currentMonthSpent += totalPrice;
     await user.save();
+
+    // Update wellness tracking immediately for paid orders
+    try {
+      console.log(`🔄 Processing wellness tracking for new paid order ${order._id}`);
+      const tracking = await WellnessTracking.getTodayTracking(user._id);
+
+      console.log(`📈 Before update - Daily: ${tracking.dailyCalories} cal, ${tracking.dailyProteins}g protein, ${tracking.dailySpent} DH`);
+
+      await tracking.addOrderStats(
+        order.totalCalories || 0,
+        order.totalProteins || 0,
+        order.totalCarbs || 0,
+        order.totalPrice || 0
+      );
+
+      order.wellnessProcessed = true;
+      await order.save();
+
+      const updatedTracking = await WellnessTracking.findById(tracking._id);
+      console.log(`📊 After update - Daily: ${updatedTracking.dailyCalories} cal, ${updatedTracking.dailyProteins}g protein, ${updatedTracking.dailySpent} DH`);
+      console.log(`✅ Updated wellness tracking for paid order ${order._id}`);
+    } catch (error) {
+      console.error(`❌ Error updating wellness tracking for new order ${order._id}:`, error);
+      // Don't fail the order creation if wellness tracking fails
+    }
   }
 
   // Increment time slot order count
@@ -169,7 +225,7 @@ export const createOrder = asyncHandler(async (req, res) => {
 // @desc    Get all orders for logged in user
 // @route   GET /api/orders/my-orders
 // @access  Private (student)
-export const getMyOrders = asyncHandler(async (req, res) => {
+const getMyOrders = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 10;
   const skip = (page - 1) * limit;
@@ -205,7 +261,7 @@ export const getMyOrders = asyncHandler(async (req, res) => {
 // @desc    Get single order
 // @route   GET /api/orders/:id
 // @access  Private
-export const getOrderById = asyncHandler(async (req, res) => {
+const getOrderById = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id)
     .populate('items.meal')
     .populate('student', 'name email');
@@ -228,7 +284,7 @@ export const getOrderById = asyncHandler(async (req, res) => {
 // @desc    Cancel order
 // @route   PATCH /api/orders/:id/cancel
 // @access  Private (student)
-export const cancelOrder = asyncHandler(async (req, res) => {
+const cancelOrder = asyncHandler(async (req, res) => {
   const order = await Order.findById(req.params.id);
 
   if (!order) {
@@ -288,7 +344,7 @@ export const cancelOrder = asyncHandler(async (req, res) => {
 // @desc    Get all orders (Cafeteria staff/admin)
 // @route   GET /api/orders
 // @access  Private (cafeteria_staff, admin)
-export const getAllOrders = asyncHandler(async (req, res) => {
+const getAllOrders = asyncHandler(async (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const limit = parseInt(req.query.limit) || 20;
   const skip = (page - 1) * limit;
@@ -329,36 +385,86 @@ export const getAllOrders = asyncHandler(async (req, res) => {
       page,
       limit,
       total,
-      pages: Math.ceil(total / limit)
     }
   });
 });
 
-// @desc    Update order status (Cafeteria staff/admin)
 // @route   PATCH /api/orders/:id/status
 // @access  Private (cafeteria_staff, admin)
-export const updateOrderStatus = asyncHandler(async (req, res) => {
+const updateOrderStatus = asyncHandler(async (req, res) => {
   const { status } = req.body;
+  const { id } = req.params;
+
+  console.log(`🔍 Updating order ${id} to status: ${status}`);
 
   if (!status) {
     throw new ErrorResponse('Please provide a status', 400);
   }
 
-  const order = await Order.findById(req.params.id);
-
+  // Find the order and populate the student field
+  const order = await Order.findById(id).populate('student', 'email');
+  
   if (!order) {
+    console.error(`❌ Order not found: ${id}`);
     throw new ErrorResponse('Order not found', 404);
   }
 
-  // Update status
-  order.status = status;
-  await order.save();
+  console.log(`📦 Found order: ${order._id} for user: ${order.student?.email || order.student}`);
 
-  // If marked as ready, you could send notification here
+  // Update status
+  const previousStatus = order.status;
+  order.status = status;
+  
+  // If marked as ready, update notification
   if (status === 'ready') {
+    console.log(`📢 Order ${order._id} is now ready for pickup`);
     order.notificationSent.ready = true;
-    await order.save();
-    // TODO: Send notification to student
+  }
+
+  // Save the order first
+  await order.save();
+  console.log(`✅ Updated order ${order._id} status to: ${status}`);
+
+  // If marked as completed or paid, update wellness tracking if not already processed
+  if ((status === 'completed' || status === 'paid') && !order.wellnessProcessed) {
+    try {
+      console.log(`🔄 Processing wellness tracking for order ${order._id}`);
+      
+      // Get the user ID (handling both populated and non-populated student)
+      const userId = order.student._id ? order.student._id.toString() : order.student.toString();
+      
+      // Get or create today's tracking
+      console.log(`🔍 Getting or creating wellness tracking for user ID: ${userId}`);
+      const tracking = await WellnessTracking.getTodayTracking(userId);
+      console.log(`📊 Found wellness tracking for user ID: ${userId}`);
+      
+      // Log before update
+      console.log(`📈 Before update - Daily: ${tracking.dailyCalories} cal, ${tracking.dailyProteins}g protein, ${tracking.dailySpent} DH`);
+      console.log(`📈 Before update - Monthly: ${tracking.monthlyCalories} cal, ${tracking.monthlyProteins}g protein, ${tracking.monthlySpent} DH`);
+      
+      // Update wellness tracking
+      await tracking.addOrderStats(
+        order.totalCalories || 0,
+        order.totalProteins || 0,
+        order.totalCarbs || 0,
+        order.totalPrice || 0
+      );
+      
+      // Mark as processed
+      order.wellnessProcessed = true;
+      await order.save();
+      
+      console.log(`✅ Updated wellness tracking for order ${order._id}: +${order.totalCalories || 0} cal, +${order.totalProteins || 0}g protein, +${order.totalPrice || 0} DH`);
+      
+      // Verify the update
+      const updatedTracking = await WellnessTracking.findById(tracking._id);
+      console.log(`📊 After update - Daily: ${updatedTracking.dailyCalories} cal, ${updatedTracking.dailyProteins}g protein, ${updatedTracking.dailySpent} DH`);
+      console.log(`📊 After update - Monthly: ${updatedTracking.monthlyCalories} cal, ${updatedTracking.monthlyProteins}g protein, ${updatedTracking.monthlySpent} DH`);
+      
+    } catch (error) {
+      console.error(`❌ Error updating wellness tracking for order ${order._id}:`, error);
+      // Don't fail the request if wellness tracking fails
+    }
   }
 
   res.json({
@@ -371,7 +477,7 @@ export const updateOrderStatus = asyncHandler(async (req, res) => {
 // @desc    Mark order as collected (Cafeteria staff)
 // @route   PATCH /api/orders/:id/collect
 // @access  Private (cafeteria_staff, admin)
-export const collectOrder = asyncHandler(async (req, res) => {
+const collectOrder = asyncHandler(async (req, res) => {
   const { qrData } = req.body;
 
   const order = await Order.findById(req.params.id);
@@ -415,3 +521,12 @@ export const collectOrder = asyncHandler(async (req, res) => {
     data: order
   });
 });
+
+export { createOrder,
+  updateOrderStatus,
+  getMyOrders,
+  getOrderById,
+  cancelOrder,
+  getAllOrders,
+  collectOrder
+ }

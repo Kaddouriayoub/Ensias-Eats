@@ -1,4 +1,4 @@
-import { User, Wallet, Order, ExternalMeal } from '../models/index.js';
+import { User, Wallet, Order, ExternalMeal, WellnessTracking } from '../models/index.js';
 import { asyncHandler } from '../middleware/errorHandler.js';
 import { ErrorResponse } from '../middleware/errorHandler.js';
 
@@ -41,6 +41,9 @@ export const updateProfile = asyncHandler(async (req, res) => {
   if (nutritionalGoal) user.nutritionalGoal = nutritionalGoal;
   if (monthlyBudgetCap !== undefined) user.monthlyBudgetCap = monthlyBudgetCap;
   if (preferredPaymentMethod) user.preferredPaymentMethod = preferredPaymentMethod;
+
+  // Mark onboarding as completed when profile is updated
+  user.onboardingCompleted = true;
 
   await user.save();
 
@@ -85,6 +88,21 @@ export const getDashboard = asyncHandler(async (req, res) => {
     createdAt: { $gte: today, $lt: tomorrow }
   });
 
+  // Get wellness tracking data for today and this month
+  const todayTracking = await WellnessTracking.getTodayTracking(user._id);
+  const monthlyStats = await WellnessTracking.getMonthlyStats(
+    user._id,
+    today.getFullYear(),
+    today.getMonth() + 1
+  );
+
+  console.log(`📊 Dashboard for ${user.email}:`);
+  console.log(`   Today: ${todayTracking.dailyCalories} cal, ${todayTracking.dailyProteins}g protein, ${todayTracking.dailySpent} DH`);
+  console.log(`   Month: ${monthlyStats.totalCalories} cal, ${monthlyStats.totalProteins}g protein, ${monthlyStats.totalSpent} DH`);
+
+  const dailyCalories = todayTracking.dailyCalories;
+  const dailyProteins = todayTracking.dailyProteins;
+
   // Get current active order
   const activeOrder = await Order.findOne({
     student: user._id,
@@ -104,13 +122,13 @@ export const getDashboard = asyncHandler(async (req, res) => {
         nutritionalGoal: user.nutritionalGoal
       },
       nutrition: {
-        dailyCalories: user.dailyCalorieIntake,
-        dailyProteins: user.dailyProteinIntake,
+        dailyCalories,
+        dailyProteins,
         lastReset: user.lastIntakeReset
       },
       budget: {
         monthlyBudgetCap: user.monthlyBudgetCap,
-        currentMonthSpent: user.currentMonthSpent,
+        currentMonthSpent: monthlyStats.totalSpent,
         remainingBudget,
         walletBalance: wallet ? wallet.balance : 0
       },

@@ -48,6 +48,20 @@ const mealSchema = new mongoose.Schema({
     min: 0
   },
 
+  // Cost and Profit (for admin profit tracking)
+  cost: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'Net cost of ingredients/preparation'
+  },
+  profitMargin: {
+    type: Number,
+    default: 0,
+    min: 0,
+    comment: 'Calculated as: price - cost'
+  },
+
   // Nutritional Information
   nutritionalInfo: {
     type: nutritionalInfoSchema,
