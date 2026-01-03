@@ -31,7 +31,7 @@
 
 ---
 
-## 🛠 Tech Stack
+## Tech Stack
 * **Frontend**: React.js & MSAL React.
 * **Backend**: Express.js (Node.js).
 * **Database**: MongoDB & Mongoose.
