@@ -2,6 +2,8 @@
 
 **ENSIAS Eats** is a comprehensive Full-Stack solution designed to revolutionize the university dining experience. By integrating institutional authentication and a "Closed-Loop" digital payment system, the platform eliminates long queues, reduces student stress, and promotes healthy eating habits.
 
+**Demo Video**: https://drive.google.com/drive/folders/12zVkXEablVJkMiBjpB9kfyWZ5IYxobDe?usp=sharing
+
 ---
 
 ## Key Technical Pillars
