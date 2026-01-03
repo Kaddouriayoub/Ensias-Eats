@@ -17,6 +17,9 @@ const Icons = {
   QrCode: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
   ),
+  Info: () => (
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+  ),
   XCircle: () => (
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
   ),
@@ -202,11 +205,11 @@ const Orders = () => {
                 <div className="flex gap-3">
                   <button
                     onClick={() => setSelectedOrder(order)}
-                    className="flex-1 py-3 bg-white text-black font-bold rounded-xl hover:bg-gray-200 transition-colors flex items-center justify-center gap-2 text-sm uppercase tracking-wide"
+                    className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition-colors flex items-center justify-center gap-2 text-sm uppercase tracking-wide shadow-lg shadow-red-900/20"
                   >
-                    <Icons.QrCode /> AFFICHER QR CODE
+                    <Icons.Info /> VOIR DÉTAILS
                   </button>
-                  
+
                   {order.status === 'pending' && (
                     <button
                       onClick={() => handleCancelOrder(order._id)}
@@ -221,34 +224,145 @@ const Orders = () => {
           </div>
         )}
 
-        {/* --- QR CODE MODAL (Dark Mode) --- */}
+        {/* --- ORDER DETAILS MODAL --- */}
         {selectedOrder && (
           <div className="fixed inset-0 z-50 flex items-center justify-center px-4">
             <div className="absolute inset-0 bg-black/80 backdrop-blur-md" onClick={() => setSelectedOrder(null)}></div>
-            
-            <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl p-8 max-w-sm w-full relative z-10 shadow-2xl animate-in fade-in zoom-in duration-200">
-              <div className="text-center mb-8">
-                <h2 className="text-2xl font-bold text-white mb-2">Retrait Commande</h2>
-                <p className="text-sm text-gray-400">Montrez ce QR Code au personnel pour récupérer votre repas.</p>
-              </div>
 
-              <div className="flex justify-center mb-8">
-                <div className="p-4 bg-white rounded-2xl shadow-[0_0_40px_rgba(255,255,255,0.1)]">
-                  <QRCode value={selectedOrder.qrCode || selectedOrder._id} size={220} />
+            <div className="bg-[#1a1a1a] border border-white/10 rounded-2xl max-w-2xl w-full relative z-10 shadow-2xl animate-in fade-in zoom-in duration-200 max-h-[90vh] overflow-y-auto">
+
+              {/* Header */}
+              <div className="sticky top-0 bg-gradient-to-r from-red-600 to-red-700 p-6 rounded-t-2xl">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h2 className="text-2xl font-bold text-white mb-2">Détails de la Commande</h2>
+                    <p className="text-sm text-red-100">Commande #{selectedOrder._id.slice(-6).toUpperCase()}</p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedOrder(null)}
+                    className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
+                  >
+                    <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                    </svg>
+                  </button>
                 </div>
               </div>
 
-              <div className="text-center space-y-2 mb-8 bg-black/30 p-4 rounded-xl border border-white/5">
-                 <p className="text-gray-500 text-xs font-bold uppercase tracking-wider">COMMANDE #{selectedOrder._id.slice(-6).toUpperCase()}</p>
-                 <p className="text-3xl font-bold text-white">{selectedOrder.totalPrice?.toFixed(2)} <span className="text-red-500 text-lg">DH</span></p>
+              {/* Content */}
+              <div className="p-6 space-y-6">
+
+                {/* Status Section */}
+                <div className="bg-black/30 rounded-xl p-4 border border-white/5">
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs text-gray-500 uppercase font-bold">Statut de la Commande</p>
+                    <span className={`px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusStyle(selectedOrder.status)}`}>
+                      {selectedOrder.status}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <p className="text-gray-500 text-xs mb-1">Date de Commande</p>
+                      <p className="text-white font-medium">
+                        {new Date(selectedOrder.createdAt).toLocaleDateString('fr-FR', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric',
+                          hour: '2-digit',
+                          minute: '2-digit'
+                        })}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs mb-1">Heure de Retrait</p>
+                      <p className="text-white font-medium font-mono">
+                        {selectedOrder.pickupTimeSlot
+                          ? new Date(selectedOrder.pickupTimeSlot).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                          : 'Dès que possible'}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Items Section */}
+                <div>
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-3">Articles Commandés</p>
+                  <div className="space-y-3">
+                    {selectedOrder.items.map((item, index) => (
+                      <div key={index} className="bg-black/30 rounded-xl p-4 border border-white/5 flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                          <span className="bg-red-600 text-white w-8 h-8 flex items-center justify-center rounded-lg text-sm font-bold">
+                            {item.quantity}x
+                          </span>
+                          <div>
+                            <p className="font-bold text-white">{item.meal?.name || 'Repas inconnu'}</p>
+                            <p className="text-xs text-gray-500">{item.meal?.category || 'Plat'}</p>
+                          </div>
+                        </div>
+                        <p className="font-bold text-white text-lg">
+                          {(item.price * item.quantity).toFixed(2)} DH
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Payment Section */}
+                <div className="bg-black/30 rounded-xl p-4 border border-white/5">
+                  <p className="text-xs text-gray-500 uppercase font-bold mb-3">Informations de Paiement</p>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <p className="text-gray-500 text-xs mb-1">Mode de Paiement</p>
+                      <p className="text-white font-medium capitalize">
+                        {selectedOrder.paymentMethod === 'wallet' ? 'Wallet' : 'Cash à la livraison'}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-gray-500 text-xs mb-1">Statut du Paiement</p>
+                      <span className={`inline-block px-2 py-1 rounded text-xs font-bold uppercase ${
+                        selectedOrder.paymentStatus === 'completed'
+                          ? 'bg-green-900/20 text-green-400 border border-green-900/50'
+                          : 'bg-yellow-900/20 text-yellow-400 border border-yellow-900/50'
+                      }`}>
+                        {selectedOrder.paymentStatus === 'completed' ? 'Payé' : 'En Attente'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Total Section */}
+                <div className="bg-gradient-to-r from-red-600/20 to-red-700/20 border border-red-500/30 rounded-xl p-6">
+                  <div className="flex justify-between items-center">
+                    <p className="text-white text-lg font-bold uppercase tracking-wide">Total</p>
+                    <p className="text-4xl font-bold text-white">
+                      {selectedOrder.totalPrice?.toFixed(2)} <span className="text-red-500 text-2xl">DH</span>
+                    </p>
+                  </div>
+                </div>
+
+                {/* QR Code Section (if needed for pickup) */}
+                {selectedOrder.qrCode && (
+                  <div className="text-center">
+                    <p className="text-xs text-gray-500 uppercase font-bold mb-3">QR Code de Retrait</p>
+                    <div className="flex justify-center">
+                      <div className="p-4 bg-white rounded-2xl inline-block">
+                        <QRCode value={selectedOrder.qrCode || selectedOrder._id} size={180} />
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mt-3">Montrez ce QR code au personnel lors du retrait</p>
+                  </div>
+                )}
               </div>
 
-              <button
-                onClick={() => setSelectedOrder(null)}
-                className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-red-900/20 transition-all uppercase tracking-wide text-sm"
-              >
-                FERMER
-              </button>
+              {/* Footer */}
+              <div className="sticky bottom-0 bg-[#1a1a1a] border-t border-white/10 p-6 rounded-b-2xl">
+                <button
+                  onClick={() => setSelectedOrder(null)}
+                  className="w-full bg-red-600 hover:bg-red-700 text-white py-4 rounded-xl font-bold shadow-lg shadow-red-900/20 transition-all uppercase tracking-wide text-sm"
+                >
+                  FERMER
+                </button>
+              </div>
             </div>
           </div>
         )}

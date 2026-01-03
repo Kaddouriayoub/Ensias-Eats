@@ -237,7 +237,7 @@ const Dashboard = () => {
                     <div className="flex justify-between items-end">
                         <div>
                             <p className="text-gray-400 text-sm mb-1">Dépensé</p>
-                            <p className="text-3xl font-bold text-white">{user.currentMonthSpent} <span className="text-base text-gray-500 font-normal">DH</span></p>
+                            <p className="text-3xl font-bold text-white">{wellnessData?.monthlyStats?.totalSpent || user?.currentMonthSpent || 0} <span className="text-base text-gray-500 font-normal">DH</span></p>
                         </div>
                         <div className="text-right">
                             <p className="text-gray-400 text-sm mb-1">Plafond</p>

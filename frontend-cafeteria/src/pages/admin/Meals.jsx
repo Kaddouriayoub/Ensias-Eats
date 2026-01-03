@@ -36,7 +36,7 @@ const Meals = () => {
       isVegetarian: false,
       isVegan: false,
       isGlutenFree: false,
-      isHalal: true
+      isHealthy: true
     },
     isAvailable: true,
     availableDays: [1, 2, 3, 4, 5]
@@ -91,7 +91,7 @@ const Meals = () => {
         isVegetarian: false,
         isVegan: false,
         isGlutenFree: false,
-        isHalal: true
+        isHealthy: true
       },
       isAvailable: true,
       availableDays: [1, 2, 3, 4, 5]
@@ -124,7 +124,7 @@ const Meals = () => {
           isVegetarian: meal.dietary?.isVegetarian || false,
           isVegan: meal.dietary?.isVegan || false,
           isGlutenFree: meal.dietary?.isGlutenFree || false,
-          isHalal: meal.dietary?.isHalal !== undefined ? meal.dietary.isHalal : true
+          isHealthy: meal.dietary?.isHealthy !== undefined ? meal.dietary.isHealthy : true
         },
         isAvailable: meal.isAvailable !== undefined ? meal.isAvailable : true,
         availableDays: meal.availableDays || [1, 2, 3, 4, 5]
@@ -254,7 +254,7 @@ const Meals = () => {
         <div className="mt-4 flex md:ml-4 md:mt-0">
           <button
             onClick={() => handleOpenModal()}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
           >
             <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" /></svg>
             Add New Meal
@@ -384,9 +384,9 @@ const Meals = () => {
                       Gluten-Free
                     </span>
                   )}
-                  {meal.dietary?.isHalal && (
+                  {meal.dietary?.isHealthy && (
                     <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                      Halal
+                      Healthy
                     </span>
                   )}
                 </div>

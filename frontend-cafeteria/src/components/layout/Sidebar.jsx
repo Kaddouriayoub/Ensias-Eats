@@ -64,6 +64,7 @@ const Sidebar = () => {
   const adminMenuItems = [
     { path: '/dashboard', label: 'Dashboard', icon: <Icons.Dashboard /> },
     { path: '/orders', label: 'Orders', icon: <Icons.Orders /> },
+    { path: '/wallet-charge', label: 'Charge Wallet', icon: <Icons.Wallet /> },
     { path: '/users', label: 'User Management', icon: <Icons.Users /> },
     { path: '/meals', label: 'Meal Management', icon: <Icons.Meals /> },
     { path: '/staff', label: 'Staff Management', icon: <Icons.Staff /> },

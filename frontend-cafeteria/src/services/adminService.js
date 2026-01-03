@@ -39,6 +39,33 @@ const adminService = {
   },
 
   // ============================================
+  // WALLET MANAGEMENT
+  // ============================================
+  chargeUserWallet: async (userId, amount, description) => {
+    const response = await api.post('/admin/wallet/charge', {
+      userId,
+      amount,
+      description
+    });
+    return response.data;
+  },
+
+  getUserWallet: async (userId) => {
+    const response = await api.get(`/admin/wallet/${userId}`);
+    return response.data;
+  },
+
+  searchStudents: async (search) => {
+    const response = await api.get(`/admin/users?search=${encodeURIComponent(search)}&role=student`);
+    return response.data;
+  },
+
+  getWalletTransactions: async (userId) => {
+    const response = await api.get(`/admin/wallet/${userId}`);
+    return response.data;
+  },
+
+  // ============================================
   // STAFF MANAGEMENT
   // ============================================
   createStaffAccount: async (staffData) => {

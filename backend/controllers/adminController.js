@@ -1,4 +1,4 @@
-import { User, Meal, Order, UserReport, Wallet } from '../models/index.js';
+import { User, Meal, Order, UserReport, Wallet, Transaction } from '../models/index.js';
 import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
@@ -69,12 +69,32 @@ export const getAllUsers = async (req, res) => {
       ];
     }
 
-    const users = await User.find(query)
-      .select('-password')
-      .sort({ createdAt: -1 })
-      .limit(limit * 1)
-      .skip((page - 1) * limit)
-      .lean();
+    const users = await User.aggregate([
+      { $match: query },
+      { $sort: { createdAt: -1 } },
+      { $skip: (page - 1) * parseInt(limit) },
+      { $limit: parseInt(limit) },
+      {
+        $lookup: {
+          from: 'wallets',
+          localField: '_id',
+          foreignField: 'user',
+          as: 'walletData'
+        }
+      },
+      {
+        $addFields: {
+          wallet: { $arrayElemAt: ['$walletData', 0] }
+        }
+      },
+      {
+        $project: {
+          password: 0,
+          walletData: 0,
+          __v: 0
+        }
+      }
+    ]);
 
     const count = await User.countDocuments(query);
 
@@ -258,6 +278,161 @@ export const deleteUser = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error deleting user'
+    });
+  }
+};
+
+// ============================================
+// WALLET MANAGEMENT
+// ============================================
+
+export const chargeUserWallet = async (req, res) => {
+  try {
+    const { userId, amount, description } = req.body;
+
+    if (!userId || !amount) {
+      return res.status(400).json({
+        success: false,
+        message: 'User ID and amount are required'
+      });
+    }
+
+    if (amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Amount must be greater than 0'
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Find or create wallet for the user
+    let wallet = await Wallet.findOne({ user: userId });
+
+    if (!wallet) {
+      // Create wallet if it doesn't exist
+      wallet = await Wallet.create({
+        user: userId,
+        balance: 0,
+        monthlyBudgetCap: user.monthlyBudgetCap || 0
+      });
+      
+      // Link wallet to user
+      user.wallet = wallet._id;
+      await user.save();
+    } else if (!user.wallet) {
+      // Ensure link exists if wallet was found but not linked
+      user.wallet = wallet._id;
+      await user.save();
+    }
+
+    // Add funds using the wallet's addFunds method
+    await wallet.addFunds(amount);
+
+    // Create transaction record
+    await Transaction.create({
+      wallet: wallet._id,
+      user: userId,
+      type: 'credit',
+      amount,
+      description: description || `Admin wallet recharge by ${req.user.name}`,
+      paymentMethod: 'wallet_recharge',
+      balanceAfter: wallet.balance,
+      status: 'completed'
+    });
+
+    console.log(`💰 Admin ${req.user.email} charged ${amount} DH to ${user.email}'s wallet`);
+
+    res.json({
+      success: true,
+      message: `Successfully charged ${amount} DH to ${user.name}'s wallet`,
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email
+        },
+        wallet: {
+          balance: wallet.balance,
+          previousBalance: wallet.balance - amount
+        },
+        transaction: {
+          amount,
+          description: description || `Admin wallet recharge by ${req.user.name}`
+        }
+      }
+    });
+  } catch (error) {
+    console.error('Error charging user wallet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error charging wallet'
+    });
+  }
+};
+
+export const getUserWallet = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    const wallet = await Wallet.findOne({ user: userId });
+
+    if (!wallet) {
+      return res.json({
+        success: true,
+        data: {
+          user: {
+            id: user._id,
+            name: user.name,
+            email: user.email
+          },
+          wallet: null,
+          message: 'User has no wallet yet'
+        }
+      });
+    }
+
+    const recentTransactions = await Transaction.find({ user: userId })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    res.json({
+      success: true,
+      data: {
+        user: {
+          id: user._id,
+          name: user.name,
+          email: user.email
+        },
+        wallet: {
+          balance: wallet.balance,
+          monthlyBudgetCap: wallet.monthlyBudgetCap,
+          currentMonthSpent: wallet.currentMonthSpent,
+          isActive: wallet.isActive
+        },
+        recentTransactions
+      }
+    });
+  } catch (error) {
+    console.error('Error getting user wallet:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching wallet information'
     });
   }
 };

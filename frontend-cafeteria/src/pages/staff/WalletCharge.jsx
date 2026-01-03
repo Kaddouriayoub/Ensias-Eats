@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react';
 import { format } from 'date-fns';
 import staffService from '../../services/staffService';
+import adminService from '../../services/adminService';
+import { useAuth } from '../../context/AuthContext';
 
 const WalletCharge = () => {
+  const { isAdmin } = useAuth();
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedStudent, setSelectedStudent] = useState(null);
@@ -17,6 +20,9 @@ const WalletCharge = () => {
 
   // Common amounts for quick selection
   const quickAmounts = [50, 100, 200, 500];
+
+  // Select appropriate service based on role
+  const service = isAdmin() ? adminService : staffService;
 
   useEffect(() => {
     if (selectedStudent) {
@@ -48,7 +54,7 @@ const WalletCharge = () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await staffService.searchStudents(searchTerm);
+      const response = await service.searchStudents(searchTerm);
       setSearchResults(response.data || []);
 
       if (response.data.length === 0) {
@@ -68,11 +74,17 @@ const WalletCharge = () => {
 
     try {
       setLoadingTransactions(true);
-      const response = await staffService.getWalletTransactions({
-        userId: selectedStudent._id,
-        limit: 10
-      });
-      setTransactions(response.data || []);
+      let response;
+      if (isAdmin()) {
+        response = await adminService.getUserWallet(selectedStudent._id);
+        setTransactions(response.data?.recentTransactions || []);
+      } else {
+        response = await staffService.getWalletTransactions({
+          userId: selectedStudent._id,
+          limit: 10
+        });
+        setTransactions(response.data || []);
+      }
     } catch (err) {
       console.error('Error fetching transactions:', err);
     } finally {
@@ -115,22 +127,36 @@ const WalletCharge = () => {
       setError(null);
       setSuccess(null);
 
-      const walletData = {
-        studentId: selectedStudent._id,
-        amount: chargeAmount,
-        paymentMethod,
-        notes: note.trim()
-      };
-
-      const response = await staffService.chargeWallet(walletData);
+      let response;
+      if (isAdmin()) {
+        // Admin uses different API
+        response = await adminService.chargeUserWallet(
+          selectedStudent._id,
+          chargeAmount,
+          note.trim() || `Wallet top-up (${paymentMethod})`
+        );
+      } else {
+        // Staff uses original API
+        const walletData = {
+          studentId: selectedStudent._id,
+          amount: chargeAmount,
+          paymentMethod,
+          notes: note.trim()
+        };
+        response = await staffService.chargeWallet(walletData);
+      }
 
       // Update student balance in UI
+      const newBalance = isAdmin()
+        ? response.data?.wallet?.balance
+        : response.data?.newBalance;
+
       setSelectedStudent({
         ...selectedStudent,
-        walletBalance: response.data.newBalance || (selectedStudent.walletBalance + chargeAmount)
+        walletBalance: newBalance || (selectedStudent.walletBalance + chargeAmount)
       });
 
-      setSuccess(`Successfully charged ${chargeAmount.toFixed(2)} MAD to ${selectedStudent.name}'s wallet`);
+      setSuccess(response.message || `Successfully charged ${chargeAmount.toFixed(2)} MAD to ${selectedStudent.name}'s wallet`);
       setAmount('');
       setPaymentMethod('cash');
       setNote('');
@@ -180,7 +206,7 @@ const WalletCharge = () => {
             <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
               <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/50 flex items-center justify-between">
                 <h3 className="text-lg font-medium leading-6 text-gray-900">Find Student</h3>
-                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800">
                   Step 1
                 </span>
               </div>
@@ -204,13 +230,13 @@ const WalletCharge = () => {
                       onKeyPress={(e) => {
                         if (e.key === 'Enter') handleSearch();
                       }}
-                      className="block w-full rounded-lg border-gray-300 pl-10 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 border"
+                      className="block w-full rounded-lg border-gray-300 pl-10 shadow-sm focus:border-red-500 focus:ring-red-500 sm:text-sm py-2.5 border"
                     />
                   </div>
                   <button
                     onClick={handleSearch}
                     disabled={loading}
-                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-lg shadow-sm text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
                     {loading ? 'Searching...' : 'Search'}
                   </button>
@@ -227,7 +253,7 @@ const WalletCharge = () => {
                     <div
                       key={student._id}
                       onClick={() => handleSelectStudent(student)}
-                      className="p-4 bg-white rounded-lg hover:bg-blue-50 cursor-pointer transition-all border border-gray-200 hover:border-blue-300 shadow-sm group"
+                      className="p-4 bg-white rounded-lg hover:bg-red-50 cursor-pointer transition-all border border-gray-200 hover:border-red-300 shadow-sm group"
                     >
                       <div className="flex justify-between items-start">
                         <div>
@@ -238,7 +264,7 @@ const WalletCharge = () => {
                           )}
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-medium text-blue-600">
+                          <p className="text-sm font-medium text-red-600">
                             {student.wallet?.balance?.toFixed(2) || '0.00'} MAD
                           </p>
                           <p className="text-xs text-gray-500">Current Balance</p>
@@ -255,31 +281,16 @@ const WalletCharge = () => {
           {/* Selected Student & Charge Form */}
           {selectedStudent && (
             <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
-              <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/50 flex justify-between items-center">
+              <div className="px-6 py-5 border-b border-gray-200 bg-gray-50/50">
                 <h3 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-                  <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                  <svg className="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
                   Charge Wallet
                 </h3>
-                <button
-                  onClick={() => {
-                    setSelectedStudent(null);
-                    setSearchResults([]);
-                    setAmount('');
-                    setPaymentMethod('cash');
-                    setNote('');
-                    setError(null);
-                    setSuccess(null);
-                  }}
-                  className="text-sm font-medium text-gray-500 hover:text-gray-700 transition-colors flex items-center gap-1"
-                >
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                  Change Student
-                </button>
               </div>
 
               <div className="p-6">
               {/* Student Info */}
-              <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-2xl p-6 mb-8 text-white shadow-lg relative overflow-hidden">
+              <div className="bg-gradient-to-r from-red-600 to-red-700 rounded-2xl p-6 mb-8 text-white shadow-lg relative overflow-hidden">
                 {/* Decorative circles */}
                 <div className="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10"></div>
                 <div className="absolute bottom-0 left-0 -ml-8 -mb-8 w-24 h-24 rounded-full bg-white opacity-10"></div>
@@ -291,14 +302,14 @@ const WalletCharge = () => {
                     </div>
                     <div>
                       <p className="font-bold text-lg">{selectedStudent.name}</p>
-                      <p className="text-blue-100 text-sm">{selectedStudent.email}</p>
+                      <p className="text-red-100 text-sm">{selectedStudent.email}</p>
                       {selectedStudent.studentId && (
-                        <p className="text-blue-200 text-xs mt-0.5 font-mono">ID: {selectedStudent.studentId}</p>
+                        <p className="text-red-200 text-xs mt-0.5 font-mono">ID: {selectedStudent.studentId}</p>
                       )}
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-blue-100 text-sm font-medium mb-1">Current Balance</p>
+                    <p className="text-red-100 text-sm font-medium mb-1">Current Balance</p>
                     <p className="text-3xl font-bold tracking-tight">
                       {selectedStudent.walletBalance?.toFixed(2) || '0.00'} <span className="text-lg font-normal opacity-80">MAD</span>
                     </p>
@@ -322,7 +333,7 @@ const WalletCharge = () => {
                           onClick={() => handleQuickAmount(quickAmount)}
                           className={`py-3 px-2 rounded-xl text-sm font-bold transition-all duration-200 ${
                             amount === quickAmount.toString()
-                              ? 'bg-blue-600 text-white shadow-md transform scale-105'
+                              ? 'bg-red-600 text-white shadow-md transform scale-105'
                               : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
                           }`}
                         >
@@ -348,7 +359,7 @@ const WalletCharge = () => {
                           min="0.01"
                           value={amount}
                           onChange={(e) => setAmount(e.target.value)}
-                          className="block w-full pl-12 rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 py-3"
+                          className="block w-full pl-12 rounded-lg border-gray-300 focus:ring-red-500 focus:border-red-500 py-3"
                           placeholder="0.00"
                           required
                         />
@@ -363,7 +374,7 @@ const WalletCharge = () => {
                       <select
                         value={paymentMethod}
                         onChange={(e) => setPaymentMethod(e.target.value)}
-                        className="block w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 py-3"
+                        className="block w-full rounded-lg border-gray-300 focus:ring-red-500 focus:border-red-500 py-3"
                       >
                         <option value="cash">Cash</option>
                         <option value="card">Card</option>
@@ -382,7 +393,7 @@ const WalletCharge = () => {
                       type="text"
                       value={note}
                       onChange={(e) => setNote(e.target.value)}
-                      className="block w-full rounded-lg border-gray-300 focus:ring-blue-500 focus:border-blue-500 py-3"
+                      className="block w-full rounded-lg border-gray-300 focus:ring-red-500 focus:border-red-500 py-3"
                       placeholder="e.g., Cash payment received"
                     />
                   </div>
@@ -406,7 +417,7 @@ const WalletCharge = () => {
                   <button
                     type="submit"
                     disabled={loading || !amount}
-                    className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg"
+                    className="w-full flex justify-center py-3.5 px-4 border border-transparent rounded-xl shadow-sm text-sm font-bold text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all hover:shadow-lg"
                   >
                     {loading ? 'Processing...' : `Charge ${amount ? parseFloat(amount).toFixed(2) : '0.00'} MAD`}
                   </button>
@@ -439,13 +450,13 @@ const WalletCharge = () => {
                 {transactions.map((transaction) => (
                   <div
                     key={transaction._id}
-                    className="p-4 bg-white rounded-xl border border-gray-100 hover:border-blue-200 transition-all shadow-sm hover:shadow-md group"
+                    className="p-4 bg-white rounded-xl border border-gray-100 hover:border-red-200 transition-all shadow-sm hover:shadow-md group"
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-start gap-3">
                         <div className={`mt-1 w-8 h-8 rounded-full flex items-center justify-center ${
-                          transaction.type === 'charge' ? 'bg-green-100 text-green-600' :
-                          transaction.type === 'refund' ? 'bg-blue-100 text-blue-600' :
+                          transaction.type === 'charge' || transaction.type === 'credit' ? 'bg-green-100 text-green-600' :
+                          transaction.type === 'refund' ? 'bg-red-100 text-red-600' :
                           'bg-red-100 text-red-600'
                         }`}>
                           {transaction.type === 'charge' ? (
@@ -458,8 +469,8 @@ const WalletCharge = () => {
                         </div>
                         <div>
                           <p className="font-bold text-gray-900">
-                            {transaction.type === 'charge' ? 'Wallet Top-up' :
-                             transaction.type === 'order' ? 'Order Payment' :
+                            {transaction.type === 'charge' || transaction.type === 'credit' ? 'Wallet Top-up' :
+                             transaction.type === 'order' || transaction.type === 'debit' ? 'Order Payment' :
                              transaction.type === 'refund' ? 'Refund Processed' :
                              transaction.type}
                           </p>
@@ -470,11 +481,11 @@ const WalletCharge = () => {
                       </div>
                       <div className="text-right">
                         <p className={`font-bold text-lg ${
-                          transaction.type === 'charge' || transaction.type === 'refund'
+                          transaction.type === 'charge' || transaction.type === 'credit' || transaction.type === 'refund'
                             ? 'text-green-600'
                             : 'text-gray-900'
                         }`}>
-                          {transaction.type === 'charge' || transaction.type === 'refund' ? '+' : '-'}
+                          {transaction.type === 'charge' || transaction.type === 'credit' || transaction.type === 'refund' ? '+' : '-'}
                           {transaction.amount?.toFixed(2)} MAD
                         </p>
                         <p className="text-xs text-gray-400 font-medium">
@@ -500,8 +511,8 @@ const WalletCharge = () => {
           </div>
           ) : (
           <div className="bg-white overflow-hidden shadow-sm rounded-xl border border-gray-200">
-            <div className="px-6 py-5 border-b border-gray-200 bg-blue-50/50">
-              <h3 className="text-lg font-medium leading-6 text-blue-900 flex items-center gap-2">
+            <div className="px-6 py-5 border-b border-gray-200 bg-red-50/50">
+              <h3 className="text-lg font-medium leading-6 text-red-900 flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                 Instructions
               </h3>
@@ -522,8 +533,8 @@ const WalletCharge = () => {
                     ) : null}
                     <div className="relative flex items-start group">
                       <span className="h-9 flex items-center">
-                        <span className="relative z-10 w-8 h-8 flex items-center justify-center bg-blue-100 rounded-full group-hover:bg-blue-200 transition-colors border-2 border-white shadow-sm">
-                          <span className="text-blue-600 font-bold text-sm">{stepIdx + 1}</span>
+                        <span className="relative z-10 w-8 h-8 flex items-center justify-center bg-red-100 rounded-full group-hover:bg-red-200 transition-colors border-2 border-white shadow-sm">
+                          <span className="text-red-600 font-bold text-sm">{stepIdx + 1}</span>
                         </span>
                       </span>
                       <span className="ml-4 min-w-0 flex flex-col">

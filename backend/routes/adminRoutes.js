@@ -10,6 +10,10 @@ import {
   activateUser,
   deleteUser,
 
+  // Wallet Management
+  chargeUserWallet,
+  getUserWallet,
+
   // Staff Management
   createStaffAccount,
   getAllStaff,
@@ -67,6 +71,12 @@ router.get('/users/:id', getUserDetails);
 router.put('/users/:id/suspend', suspendUser);
 router.put('/users/:id/activate', activateUser);
 router.delete('/users/:id', deleteUser);
+
+// ============================================
+// WALLET MANAGEMENT ROUTES
+// ============================================
+router.post('/wallet/charge', chargeUserWallet);
+router.get('/wallet/:userId', getUserWallet);
 
 // ============================================
 // STAFF MANAGEMENT ROUTES

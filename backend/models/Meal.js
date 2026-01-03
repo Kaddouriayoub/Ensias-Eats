@@ -104,7 +104,7 @@ const mealSchema = new mongoose.Schema({
     isVegetarian: { type: Boolean, default: false },
     isVegan: { type: Boolean, default: false },
     isGlutenFree: { type: Boolean, default: false },
-    isHalal: { type: Boolean, default: true }
+    isHealthy: { type: Boolean, default: true }
   },
 
   // Popularity tracking

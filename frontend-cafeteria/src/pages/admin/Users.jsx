@@ -89,7 +89,7 @@ const Users = () => {
   const getRoleBadge = (role) => {
     const styles = {
       admin: 'bg-purple-100 text-purple-800 border-purple-200',
-      cafeteria_staff: 'bg-blue-100 text-blue-800 border-blue-200',
+      cafeteria_staff: 'bg-red-100 text-red-800 border-red-200',
       student: 'bg-green-100 text-green-800 border-green-200'
     };
     const labels = {
@@ -120,7 +120,7 @@ const Users = () => {
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            className="inline-flex items-center px-4 py-2 border border-transparent rounded-lg shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors"
           >
             <svg className="-ml-1 mr-2 h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
@@ -141,7 +141,7 @@ const Users = () => {
             </div>
             <input
               type="text"
-              className="block w-full rounded-lg border-gray-300 pl-10 focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 border"
+              className="block w-full rounded-lg border-gray-300 pl-10 focus:border-red-500 focus:ring-red-500 sm:text-sm py-2.5 border"
               placeholder="Search by name, email, or student ID..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -151,7 +151,7 @@ const Users = () => {
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 px-3 border"
+            className="block w-full rounded-lg border-gray-300 focus:border-red-500 focus:ring-red-500 sm:text-sm py-2.5 px-3 border"
           >
             <option value="all">All Roles</option>
             <option value="student">Student</option>
@@ -162,7 +162,7 @@ const Users = () => {
           <select
             value={statusFilter}
             onChange={(e) => setStatusFilter(e.target.value)}
-            className="block w-full rounded-lg border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm py-2.5 px-3 border"
+            className="block w-full rounded-lg border-gray-300 focus:border-red-500 focus:ring-red-500 sm:text-sm py-2.5 px-3 border"
           >
             <option value="all">All Status</option>
             <option value="active">Active</option>
@@ -188,7 +188,7 @@ const Users = () => {
                 <tr>
                   <td colSpan="5" className="px-6 py-12 text-center text-gray-500">
                     <div className="flex justify-center items-center">
-                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mr-2"></div>
+                      <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600 mr-2"></div>
                       Loading users...
                     </div>
                   </td>
@@ -227,10 +227,10 @@ const Users = () => {
                         {user.isSuspended ? 'Suspended' : 'Active'}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                    <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-3">
                       <button
                         onClick={() => handleToggleStatus(user._id, user.isSuspended)}
-                        className={`text-${user.isSuspended ? 'green' : 'orange'}-600 hover:text-${user.isSuspended ? 'green' : 'orange'}-900 mr-4`}
+                        className={`text-${user.isSuspended ? 'green' : 'orange'}-600 hover:text-${user.isSuspended ? 'green' : 'orange'}-900`}
                       >
                         {user.isSuspended ? 'Activate' : 'Suspend'}
                       </button>

@@ -3,6 +3,7 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import orderService from '../../services/orderService';
 import timeSlotService from '../../services/timeSlotService';
+import walletService from '../../services/walletService';
 
 const MainLayout = () => {
   // On récupère 'user' pour éviter le bug de l'écran noir lors de la commande
@@ -14,6 +15,8 @@ const MainLayout = () => {
   const [showCart, setShowCart] = useState(false);
   const [timeSlots, setTimeSlots] = useState([]);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState('cash_on_delivery');
+  const [walletBalance, setWalletBalance] = useState(0);
   const [orderLoading, setOrderLoading] = useState(false);
 
   // Charger les créneaux horaires
@@ -29,6 +32,24 @@ const MainLayout = () => {
     };
     fetchTimeSlots();
   }, []);
+
+  // Charger le solde du wallet
+  useEffect(() => {
+    const fetchWalletBalance = async () => {
+      try {
+        const response = await walletService.getBalance();
+        if (response.success) {
+          setWalletBalance(response.data.balance);
+        }
+      } catch (error) {
+        console.error('Erreur wallet balance:', error);
+        setWalletBalance(0);
+      }
+    };
+    if (user) {
+      fetchWalletBalance();
+    }
+  }, [user]);
 
   const handleLogout = () => {
     logout();
@@ -67,6 +88,15 @@ const MainLayout = () => {
 
   const handlePlaceOrder = async () => {
     if (cart.length === 0) return;
+
+    const totalPrice = getTotalPrice();
+
+    // Vérifier si le solde du wallet est suffisant pour le paiement wallet
+    if (paymentMethod === 'wallet' && walletBalance < totalPrice) {
+      alert(`Solde insuffisant. Votre solde actuel est de ${walletBalance.toFixed(2)} DH, mais le total de la commande est de ${totalPrice.toFixed(2)} DH.`);
+      return;
+    }
+
     setOrderLoading(true);
     try {
       const orderData = {
@@ -74,14 +104,19 @@ const MainLayout = () => {
           mealId: item._id,
           quantity: item.quantity,
         })),
-        paymentMethod: user?.preferredPaymentMethod || 'cash_on_delivery', 
+        paymentMethod: paymentMethod,
       };
       if (selectedTimeSlot) orderData.timeSlotId = selectedTimeSlot;
 
       const response = await orderService.createOrder(orderData);
       if (response.success) {
+        // Si paiement wallet, mettre à jour le solde local
+        if (paymentMethod === 'wallet') {
+          setWalletBalance(walletBalance - totalPrice);
+        }
         setCart([]);
         setShowCart(false);
+        setPaymentMethod('cash_on_delivery'); // Reset to default
         navigate('/student/orders');
       }
     } catch (error) {
@@ -240,6 +275,33 @@ const MainLayout = () => {
             </div>
             {cart.length > 0 && (
                 <div className="p-6 border-t border-[#333] bg-[#151515]">
+                    {/* Payment Method Selector */}
+                    <div className="mb-4">
+                        <label className="text-sm text-gray-400 mb-2 block">Mode de Paiement</label>
+                        <select
+                          value={paymentMethod}
+                          onChange={(e) => setPaymentMethod(e.target.value)}
+                          className="w-full p-3 rounded bg-[#2a2a2a] text-white border border-[#333] outline-none"
+                        >
+                            <option value="cash_on_delivery">Cash à la livraison</option>
+                            <option value="wallet">Payer avec Wallet</option>
+                        </select>
+                        {paymentMethod === 'wallet' && (
+                          <div className="mt-2 p-3 rounded bg-[#2a2a2a] border border-[#333]">
+                            <div className="flex justify-between items-center text-sm">
+                              <span className="text-gray-400">Solde Wallet:</span>
+                              <span className={`font-bold ${walletBalance >= getTotalPrice() ? 'text-green-500' : 'text-red-500'}`}>
+                                {walletBalance.toFixed(2)} DH
+                              </span>
+                            </div>
+                            {walletBalance < getTotalPrice() && (
+                              <p className="text-xs text-red-400 mt-2">⚠️ Solde insuffisant pour cette commande</p>
+                            )}
+                          </div>
+                        )}
+                    </div>
+
+                    {/* Time Slot Selector */}
                     <div className="mb-4">
                         <label className="text-sm text-gray-400 mb-2 block">Créneau (Optionnel)</label>
                         <select value={selectedTimeSlot} onChange={(e) => setSelectedTimeSlot(e.target.value)} className="w-full p-3 rounded bg-[#2a2a2a] text-white border border-[#333] outline-none">
@@ -247,6 +309,8 @@ const MainLayout = () => {
                             {timeSlots.map(slot => (<option key={slot._id} value={slot._id}>{new Date(slot.startTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</option>))}
                         </select>
                     </div>
+
+                    {/* Total and Checkout Button */}
                     <div className="flex justify-between items-center mb-6 text-xl font-bold text-white"><span>Total</span><span className="text-red-500">{getTotalPrice().toFixed(2)} DH</span></div>
                     <button onClick={handlePlaceOrder} disabled={orderLoading} className="btn-primary w-full py-4 text-lg shadow-lg shadow-red-900/20">{orderLoading ? 'Validation...' : 'COMMANDER'}</button>
                 </div>
