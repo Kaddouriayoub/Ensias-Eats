@@ -59,15 +59,16 @@ Follow these commands to launch the development environment:
 ### 1. Start the Backend API Open a terminal and run:
 Bash
 
-cd backend
-npm run dev
 
-The server will initialize on http://localhost:5000 by default.
+`` cd backend
+    npm run dev ``
+
+The server will initialize on http://localhost:3001 by default.
 
 ### 2. Start the Frontend Client Open a second terminal and run:
 Bash
 
-cd frontend
-npm run dev
+`` cd frontend
+npm run dev ``
 
 The interface will be accessible at http://localhost:5173.
