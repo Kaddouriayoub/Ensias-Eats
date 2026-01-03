@@ -65,10 +65,17 @@ Bash
 
 The server will initialize on http://localhost:3001 by default.
 
-### 2. Start the Frontend Client Open a second terminal and run:
+### 2. Start the Frontend Student Open a second terminal and run:
 Bash
 
 `` cd frontend
 npm run dev ``
 
-The interface will be accessible at http://localhost:5173.
+The interface will be accessible at http://localhost:5173
+### 2. Start the Frontend Student Open a second terminal and run:
+Bash
+
+`` cd frontend-cafeteria
+npm run dev ``
+
+The interface will be accessible at http://localhost:5175
