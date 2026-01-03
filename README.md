@@ -6,6 +6,10 @@
 
 ---
 
+### Why ENSIAS Eats?
+
+ENSIAS Eats addresses the critical friction points of campus life by digitizing the traditional cafeteria model. At its core, the platform serves a dual purpose: it restores operational efficiency for the administration through automated profit tracking and real-time order management, while simultaneously empowering students with data-driven health decisions. By replacing insecure cash transactions with a robust atomic wallet system and providing instant visibility into nutritional macros, ENSIAS Eats transforms the daily meal from a source of stress into a seamless, transparent, and modern experience tailored for the next generation of engineers.
+
 ## Key Technical Pillars
 
 ### 1. Enterprise-Grade Authentication & Security
