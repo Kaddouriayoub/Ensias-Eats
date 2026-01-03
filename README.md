@@ -51,4 +51,25 @@ The project is divided into three main components:
 
 1. **Clone the repository**:
    ```bash
-   git clone [https://github.com/kaddouriayoub/ensias-eats.git](https://github.com/your-repo/ensias-eats.git)
+   git clone [https://github.com/kaddouriayoub/ensias-eats.git]
+
+
+   To run the ENSIAS Eats platform, you must initiate both the architectural layers simultaneously to enable real-time communication between the client-side interface and the server-side API. The Backend (Express.js) manages the database handshake with MongoDB and initializes the authentication services. Simultaneously, the Frontend (Vite + React) serves the premium "Glassmorphism" interface.
+
+Follow these commands to launch the development environment:
+
+1. Start the Backend API Open a terminal and run:
+Bash
+
+cd backend
+npm run dev
+
+The server will initialize on http://localhost:5000 by default.
+
+2. Start the Frontend Client Open a second terminal and run:
+Bash
+
+cd frontend
+npm run dev
+
+The interface will be accessible at http://localhost:5173.
