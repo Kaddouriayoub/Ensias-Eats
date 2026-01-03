@@ -27,7 +27,6 @@
 * **Glassmorphism Theme**: A modern dark-mode interface featuring backdrop blurs and smooth transitions for a premium "Silicon Valley" feel.
 * **Smart Cart**: Instant checkout experience integrated directly with the student's digital wallet.
 * **Order Tracking**: Real-time visual indicators that guide the student from "Order Placed" to "Ready for Pickup".
-* **QR Verification**: Secure and fast order fulfillment via QR code scanning at the pickup counter.
 
 ---
 
@@ -37,6 +36,14 @@
 * **Database**: MongoDB & Mongoose.
 * **Authentication**: Azure AD & JWT.
 * **File Handling**: Multer for secure meal image uploads.
+
+* ## Architecture
+
+The project is divided into three main components:
+
+1.  **Backend API**: Node.js/Express server with MongoDB.
+2.  **Student Frontend**: React application for students to order meals and track nutrition.
+3.  **Cafeteria Dashboard**: React application for staff and admins to manage operations.
 
 ---
 
