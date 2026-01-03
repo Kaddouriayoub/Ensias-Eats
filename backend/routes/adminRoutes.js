@@ -1,4 +1,7 @@
 import express from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import {
   // User Management
   getAllUsers,
@@ -23,11 +26,29 @@ import {
   getRevenueStats,
   getAllReports,
   resolveReport,
-  getDashboardStats
+  getDashboardStats,
+  getAllOrders
 } from '../controllers/adminController.js';
 import { protect, adminOnly } from '../middleware/auth.js';
 
 const router = express.Router();
+
+// Configure multer for file uploads
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    const tempDir = path.join(process.cwd(), 'temp_uploads');
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+    cb(null, tempDir);
+  },
+  filename: function (req, file, cb) {
+    const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+    cb(null, file.fieldname + '-' + uniqueSuffix + path.extname(file.originalname));
+  }
+});
+
+const upload = multer({ storage: storage });
 
 // All admin routes require authentication and admin privileges
 router.use(protect);
@@ -58,10 +79,11 @@ router.delete('/staff/:id', deleteStaff);
 // ============================================
 // MEAL MANAGEMENT ROUTES
 // ============================================
-router.post('/meals', createMeal);
-router.put('/meals/:id', updateMeal);
+router.post('/meals', upload.single('image'), createMeal);
+router.put('/meals/:id', upload.single('image'), updateMeal);
 router.delete('/meals/:id', deleteMeal);
 router.get('/meals/profit-stats', getMealProfitStats);
+router.get('/orders', getAllOrders);
 
 // ============================================
 // ANALYTICS & REPORTS ROUTES

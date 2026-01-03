@@ -1,6 +1,8 @@
 import express from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
+import path from 'path';
+import fs from 'fs';
 import connectDB from './config/database.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
@@ -25,19 +27,27 @@ const app = express();
 // Connect to MongoDB
 connectDB();
 
+// Create uploads directory if it doesn't exist
+const uploadsDir = path.join(process.cwd(), 'public', 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+  console.log('✅ Created uploads directory');
+}
+
 // Middleware
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:3000',
+  origin: ['http://localhost:3000', 'http://localhost:5173', 'http://localhost:5174', process.env.CLIENT_URL].filter(Boolean),
   credentials: true
 }));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Serve static files from public directory
+app.use(express.static('public'));
+
 app.use((req, res, next) => {
   console.log(`📨 ${req.method} ${req.path}`);
-  console.log(`📨 Full URL: ${req.url}`);
-  console.log(`📨 Original URL: ${req.originalUrl}`);
   next();
 });
 
@@ -60,11 +70,7 @@ app.get('/health', (req, res) => {
 });
 
 // API Routes
-// API Routes
-app.use('/api/auth', (req, res, next) => {
-  console.log('🎯 Request hitting /api/auth:', req.method, req.path);
-  next();
-}, authRoutes);
+app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
 app.use('/api/meals', mealRoutes);
 app.use('/api/orders', orderRoutes);
@@ -79,7 +85,7 @@ app.use('/api/staff', staffRoutes);
 app.use((req, res) => {
   res.status(404).json({
     success: false,
-    message: 'Route not found'
+    message: `Route not found: ${req.method} ${req.originalUrl}`
   });
 });
 
@@ -89,7 +95,7 @@ app.use(errorHandler);
 // Start server
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
-  console.log(`Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
+  console.log(`🚀 Server running in ${process.env.NODE_ENV} mode on port ${PORT}`);
 });
 
 export default app;

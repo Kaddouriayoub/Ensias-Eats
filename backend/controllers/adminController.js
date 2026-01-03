@@ -1,28 +1,67 @@
 import { User, Meal, Order, UserReport, Wallet } from '../models/index.js';
 import bcrypt from 'bcryptjs';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Helper to save image to public folder
+const saveImageToPublic = (file) => {
+  if (!file) return null;
+  try {
+    // Use path.resolve to get the absolute path to the public directory
+    const publicDir = path.resolve(__dirname, '..', 'public');
+    const uploadsDir = path.join(publicDir, 'uploads');
+    
+    // Ensure directories exist
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    let ext = path.extname(file.originalname);
+    if (!ext || ext === '.') ext = '.jpg';
+
+    const filename = `meal-${Date.now()}${ext}`;
+    const targetPath = path.join(uploadsDir, filename);
+    
+    console.log(`📂 Saving image to: ${targetPath}`);
+
+    // Handle both DiskStorage (file.path) and MemoryStorage (file.buffer)
+    if (file.path) {
+      fs.copyFileSync(file.path, targetPath);
+      try { fs.unlinkSync(file.path); } catch (e) { console.warn('Note: Failed to delete temp file:', e.message); }
+    } else if (file.buffer) {
+      fs.writeFileSync(targetPath, file.buffer);
+    } else {
+      console.error('❌ No file path or buffer found in req.file');
+      return null;
+    }
+    
+    const relativePath = `uploads/${filename}`.replace(/\\/g, '/'); // Ensure forward slashes
+    console.log(`✅ Image saved successfully as: ${relativePath}`);
+    return relativePath;
+  } catch (error) {
+    console.error('❌ Error saving image to public:', error);
+    return null;
+  }
+};
 
 // ============================================
 // USER MANAGEMENT
 // ============================================
 
-// Get all users with filters
 export const getAllUsers = async (req, res) => {
   try {
     const { role, search, suspended, page = 1, limit = 20 } = req.query;
-
     let query = {};
 
-    // Filter by role
-    if (role) {
-      query.role = role;
-    }
-
-    // Filter by suspension status
-    if (suspended !== undefined) {
-      query.isSuspended = suspended === 'true';
-    }
-
-    // Search by name or email
+    if (role) query.role = role;
+    if (suspended !== undefined) query.isSuspended = suspended === 'true';
     if (search) {
       query.$or = [
         { name: { $regex: search, $options: 'i' } },
@@ -55,7 +94,6 @@ export const getAllUsers = async (req, res) => {
   }
 };
 
-// Get user details
 export const getUserDetails = async (req, res) => {
   try {
     const user = await User.findById(req.params.id)
@@ -70,7 +108,6 @@ export const getUserDetails = async (req, res) => {
       });
     }
 
-    // Get user's order statistics
     const orderStats = await Order.aggregate([
       { $match: { student: user._id } },
       {
@@ -101,7 +138,6 @@ export const getUserDetails = async (req, res) => {
   }
 };
 
-// Suspend user
 export const suspendUser = async (req, res) => {
   try {
     const { reason } = req.body;
@@ -137,7 +173,7 @@ export const suspendUser = async (req, res) => {
 
     await user.save();
 
-    console.log(` User ${user.email} suspended by ${req.user.email}`);
+    console.log(`⚠️ User ${user.email} suspended by ${req.user.email}`);
 
     res.json({
       success: true,
@@ -153,7 +189,6 @@ export const suspendUser = async (req, res) => {
   }
 };
 
-// Activate user (remove suspension)
 export const activateUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -172,7 +207,7 @@ export const activateUser = async (req, res) => {
 
     await user.save();
 
-    console.log(` User ${user.email} activated by ${req.user.email}`);
+    console.log(`✅ User ${user.email} activated by ${req.user.email}`);
 
     res.json({
       success: true,
@@ -188,7 +223,6 @@ export const activateUser = async (req, res) => {
   }
 };
 
-// Delete user
 export const deleteUser = async (req, res) => {
   try {
     const user = await User.findById(req.params.id);
@@ -207,14 +241,13 @@ export const deleteUser = async (req, res) => {
       });
     }
 
-    // Delete associated wallet if exists
     if (user.wallet) {
       await Wallet.findByIdAndDelete(user.wallet);
     }
 
     await User.findByIdAndDelete(req.params.id);
 
-    console.log(`=�  User ${user.email} deleted by ${req.user.email}`);
+    console.log(`🗑️ User ${user.email} deleted by ${req.user.email}`);
 
     res.json({
       success: true,
@@ -233,12 +266,10 @@ export const deleteUser = async (req, res) => {
 // STAFF MANAGEMENT
 // ============================================
 
-// Create cafeteria staff account
 export const createStaffAccount = async (req, res) => {
   try {
     const { name, email, password } = req.body;
 
-    // Validation
     if (!name || !email || !password) {
       return res.status(400).json({
         success: false,
@@ -246,7 +277,6 @@ export const createStaffAccount = async (req, res) => {
       });
     }
 
-    // Check if email already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(400).json({
@@ -255,7 +285,6 @@ export const createStaffAccount = async (req, res) => {
       });
     }
 
-    // Create staff user
     const staff = await User.create({
       name,
       email,
@@ -264,7 +293,7 @@ export const createStaffAccount = async (req, res) => {
       onboardingCompleted: true
     });
 
-    console.log(` Staff account created: ${email} by ${req.user.email}`);
+    console.log(`👤 Staff account created: ${email} by ${req.user.email}`);
 
     res.status(201).json({
       success: true,
@@ -285,7 +314,6 @@ export const createStaffAccount = async (req, res) => {
   }
 };
 
-// Get all staff
 export const getAllStaff = async (req, res) => {
   try {
     const staff = await User.find({ role: 'cafeteria_staff' })
@@ -307,7 +335,6 @@ export const getAllStaff = async (req, res) => {
   }
 };
 
-// Update staff
 export const updateStaff = async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -340,7 +367,6 @@ export const updateStaff = async (req, res) => {
   }
 };
 
-// Delete staff
 export const deleteStaff = async (req, res) => {
   try {
     const staff = await User.findById(req.params.id);
@@ -354,7 +380,7 @@ export const deleteStaff = async (req, res) => {
 
     await User.findByIdAndDelete(req.params.id);
 
-    console.log(`=�  Staff ${staff.email} deleted by ${req.user.email}`);
+    console.log(`🗑️ Staff ${staff.email} deleted by ${req.user.email}`);
 
     res.json({
       success: true,
@@ -373,28 +399,82 @@ export const deleteStaff = async (req, res) => {
 // MEAL MANAGEMENT WITH PROFIT TRACKING
 // ============================================
 
-// Create meal
 export const createMeal = async (req, res) => {
   try {
-    const { name, description, price, cost, category, nutritionalInfo, dietary, availableDays } = req.body;
+    let { name, description, price, cost, category, nutritionalInfo, dietary, availableDays, isAvailable } = req.body;
+
+    console.log('📝 Create Meal Request Body:', req.body);
+    console.log('📁 Uploaded File:', req.file ? req.file.originalname : 'None');
+    
+    // Handle file upload FIRST
+    let image = null;
+    if (req.file) {
+      console.log('✅ Processing uploaded file:', req.file.originalname);
+      const savedPath = saveImageToPublic(req.file);
+      if (savedPath && savedPath.length > 0) {
+        image = savedPath;
+        console.log('✅ Image saved at:', savedPath);
+      } else {
+        console.error('❌ Failed to save image');
+      }
+    } else {
+      console.log('⚠️ No file uploaded');
+    }
+
+    // Parse JSON strings if coming from FormData
+    if (typeof nutritionalInfo === 'string') {
+      try {
+        nutritionalInfo = JSON.parse(nutritionalInfo);
+      } catch (e) {
+        console.error('Error parsing nutritionalInfo:', e);
+      }
+    }
+    if (typeof dietary === 'string') {
+      try {
+        dietary = JSON.parse(dietary);
+      } catch (e) {
+        console.error('Error parsing dietary:', e);
+      }
+    }
+    if (typeof availableDays === 'string') {
+      try {
+        availableDays = JSON.parse(availableDays);
+      } catch (e) {
+        console.error('Error parsing availableDays:', e);
+      }
+    }
+
+    // Ensure numbers
+    price = parseFloat(price) || 0;
+    cost = parseFloat(cost) || 0;
 
     // Calculate profit margin
-    const profitMargin = (price || 0) - (cost || 0);
+    const profitMargin = price - cost;
 
+    // Create meal with the saved image path
     const meal = await Meal.create({
       name,
       description,
       price,
-      cost: cost || 0,
+      cost,
+      image,
       profitMargin,
       category,
-      nutritionalInfo,
+      nutritionalInfo: {
+        calories: parseFloat(nutritionalInfo?.calories) || 0,
+        proteins: parseFloat(nutritionalInfo?.proteins) || 0,
+        carbohydrates: parseFloat(nutritionalInfo?.carbohydrates) || 0,
+        fats: parseFloat(nutritionalInfo?.fats) || 0,
+        fiber: parseFloat(nutritionalInfo?.fiber) || 0
+      },
       dietary,
       availableDays,
+      isAvailable: isAvailable === 'true' || isAvailable === true,
       createdBy: req.user._id
     });
 
-    console.log(` Meal created: ${name} (Cost: ${cost} DH, Price: ${price} DH, Profit: ${profitMargin} DH)`);
+    console.log('✅ Meal created successfully:', meal.name);
+    console.log('📷 Image saved as:', meal.image);
 
     res.status(201).json({
       success: true,
@@ -402,7 +482,7 @@ export const createMeal = async (req, res) => {
       data: meal
     });
   } catch (error) {
-    console.error('Error creating meal:', error);
+    console.error('❌ Error creating meal:', error);
     res.status(500).json({
       success: false,
       message: 'Error creating meal',
@@ -411,10 +491,37 @@ export const createMeal = async (req, res) => {
   }
 };
 
-// Update meal
 export const updateMeal = async (req, res) => {
   try {
-    const { price, cost } = req.body;
+    console.log('📝 Update Meal - ID:', req.params.id);
+    console.log('📁 Uploaded File:', req.file ? req.file.originalname : 'None');
+    console.log('📝 Request Body:', req.body);
+    
+    let { name, description, price, cost, category, nutritionalInfo, dietary, availableDays, isAvailable } = req.body;
+    
+    // Parse JSON strings
+    if (typeof nutritionalInfo === 'string') {
+      try {
+        nutritionalInfo = JSON.parse(nutritionalInfo);
+      } catch (e) {
+        console.error('Error parsing nutritionalInfo:', e);
+      }
+    }
+    if (typeof dietary === 'string') {
+      try {
+        dietary = JSON.parse(dietary);
+      } catch (e) {
+        console.error('Error parsing dietary:', e);
+      }
+    }
+    if (typeof availableDays === 'string') {
+      try {
+        availableDays = JSON.parse(availableDays);
+      } catch (e) {
+        console.error('Error parsing availableDays:', e);
+      }
+    }
+
     const meal = await Meal.findById(req.params.id);
 
     if (!meal) {
@@ -424,24 +531,49 @@ export const updateMeal = async (req, res) => {
       });
     }
 
-    // Update fields
-    Object.keys(req.body).forEach(key => {
-      if (key !== 'profitMargin') {
-        meal[key] = req.body[key];
-      }
-    });
-
-    // Recalculate profit margin if price or cost changed
-    if (price !== undefined || cost !== undefined) {
-      const finalPrice = price !== undefined ? price : meal.price;
-      const finalCost = cost !== undefined ? cost : meal.cost;
-      meal.profitMargin = finalPrice - finalCost;
+    // Update basic fields
+    if (name !== undefined) meal.name = name;
+    if (description !== undefined) meal.description = description;
+    if (price !== undefined) meal.price = parseFloat(price) || 0;
+    if (cost !== undefined) meal.cost = parseFloat(cost) || 0;
+    if (category !== undefined) meal.category = category;
+    if (isAvailable !== undefined) {
+      meal.isAvailable = isAvailable === 'true' || isAvailable === true;
     }
+
+    // Update complex fields
+    if (nutritionalInfo) {
+      meal.nutritionalInfo = {
+        calories: parseFloat(nutritionalInfo.calories) || 0,
+        proteins: parseFloat(nutritionalInfo.proteins) || 0,
+        carbohydrates: parseFloat(nutritionalInfo.carbohydrates) || 0,
+        fats: parseFloat(nutritionalInfo.fats) || 0,
+        fiber: parseFloat(nutritionalInfo.fiber) || 0
+      };
+    }
+    if (dietary) meal.dietary = dietary;
+    if (availableDays) meal.availableDays = availableDays;
+
+    // Handle image update
+    if (req.file) {
+      console.log('✅ Processing new uploaded file:', req.file.originalname);
+      const savedPath = saveImageToPublic(req.file);
+      if (savedPath && savedPath.length > 0) {
+        meal.image = savedPath;
+        console.log('✅ Image updated to:', savedPath);
+      }
+    } else if (req.body.image === '' || req.body.image === null || req.body.image === 'null') {
+      meal.image = null;
+      console.log('🗑️ Image cleared');
+    }
+
+    // Recalculate profit margin
+    meal.profitMargin = (meal.price || 0) - (meal.cost || 0);
 
     meal.updatedBy = req.user._id;
     await meal.save();
 
-    console.log(` Meal updated: ${meal.name}`);
+    console.log('✅ Meal updated successfully:', meal.name);
 
     res.json({
       success: true,
@@ -449,15 +581,15 @@ export const updateMeal = async (req, res) => {
       data: meal
     });
   } catch (error) {
-    console.error('Error updating meal:', error);
+    console.error('❌ Error updating meal:', error);
     res.status(500).json({
       success: false,
-      message: 'Error updating meal'
+      message: 'Error updating meal',
+      error: error.message
     });
   }
 };
 
-// Delete meal
 export const deleteMeal = async (req, res) => {
   try {
     const meal = await Meal.findByIdAndDelete(req.params.id);
@@ -469,7 +601,7 @@ export const deleteMeal = async (req, res) => {
       });
     }
 
-    console.log(`=�  Meal deleted: ${meal.name} by ${req.user.email}`);
+    console.log(`🗑️ Meal deleted: ${meal.name} by ${req.user.email}`);
 
     res.json({
       success: true,
@@ -484,15 +616,12 @@ export const deleteMeal = async (req, res) => {
   }
 };
 
-// Get meal profit statistics
 export const getMealProfitStats = async (req, res) => {
   try {
-    // Get all meals with profit data
     const meals = await Meal.find()
       .select('name price cost profitMargin orderCount')
       .lean();
 
-    // Calculate total profit from all orders
     const profitByMeal = await Order.aggregate([
       { $match: { status: { $in: ['completed', 'paid'] } } },
       { $unwind: '$items' },
@@ -526,7 +655,6 @@ export const getMealProfitStats = async (req, res) => {
       { $sort: { totalProfit: -1 } }
     ]);
 
-    // Calculate overall statistics
     const totalProfit = profitByMeal.reduce((sum, meal) => sum + meal.totalProfit, 0);
     const totalRevenue = profitByMeal.reduce((sum, meal) => sum + meal.totalRevenue, 0);
 
@@ -552,10 +680,9 @@ export const getMealProfitStats = async (req, res) => {
 // ANALYTICS & REPORTS
 // ============================================
 
-// Get revenue statistics
 export const getRevenueStats = async (req, res) => {
   try {
-    const { period = 'week' } = req.query; // day, week, month, year
+    const { period = 'week' } = req.query;
 
     let dateFilter = {};
     const now = new Date();
@@ -616,7 +743,6 @@ export const getRevenueStats = async (req, res) => {
   }
 };
 
-// Get all reports (from staff)
 export const getAllReports = async (req, res) => {
   try {
     const { status, priority } = req.query;
@@ -646,7 +772,6 @@ export const getAllReports = async (req, res) => {
   }
 };
 
-// Resolve report
 export const resolveReport = async (req, res) => {
   try {
     const { adminNotes } = req.body;
@@ -666,7 +791,7 @@ export const resolveReport = async (req, res) => {
 
     await report.save();
 
-    console.log(` Report resolved by ${req.user.email}`);
+    console.log(`✅ Report resolved by ${req.user.email}`);
 
     res.json({
       success: true,
@@ -682,30 +807,94 @@ export const resolveReport = async (req, res) => {
   }
 };
 
-// Get dashboard statistics
 export const getDashboardStats = async (req, res) => {
   try {
-    // User statistics
+    const { startDate, endDate } = req.query;
+    
+    let dateQuery = {};
+    if (startDate) {
+      const start = new Date(startDate);
+      start.setHours(0, 0, 0, 0);
+      const end = endDate ? new Date(endDate) : new Date(startDate);
+      end.setHours(23, 59, 59, 999);
+      dateQuery = { createdAt: { $gte: start, $lte: end } };
+    }
+
     const totalUsers = await User.countDocuments({ role: 'student' });
     const totalStaff = await User.countDocuments({ role: 'cafeteria_staff' });
     const suspendedUsers = await User.countDocuments({ isSuspended: true });
 
-    // Order statistics
-    const totalOrders = await Order.countDocuments({ status: { $in: ['completed', 'paid'] } });
+    const totalOrders = await Order.countDocuments({ status: { $in: ['completed', 'paid'] }, ...dateQuery });
     const pendingOrders = await Order.countDocuments({ status: 'pending' });
 
-    // Revenue
-    const revenueStats = await Order.aggregate([
-      { $match: { status: { $in: ['completed', 'paid'] } } },
-      {
-        $group: {
-          _id: null,
-          totalRevenue: { $sum: '$totalPrice' }
+    const calculateRevenue = async (dateFilter = {}) => {
+      const result = await Order.aggregate([
+        { 
+          $match: { 
+            status: { $in: ['completed', 'paid'] },
+            ...dateFilter
+          } 
+        },
+        {
+          $group: {
+            _id: null,
+            totalRevenue: { $sum: '$totalPrice' }
+          }
         }
-      }
-    ]);
+      ]);
+      return result[0]?.totalRevenue || 0;
+    };
 
-    // Meal statistics
+    const calculateProfit = async (dateFilter = {}) => {
+      const result = await Order.aggregate([
+        { 
+          $match: { 
+            status: { $in: ['completed', 'paid'] },
+            ...dateFilter
+          } 
+        },
+        { $unwind: '$items' },
+        {
+          $lookup: {
+            from: 'meals',
+            localField: 'items.meal',
+            foreignField: '_id',
+            as: 'mealData'
+          }
+        },
+        { $unwind: { path: '$mealData', preserveNullAndEmptyArrays: true } },
+        {
+          $group: {
+            _id: null,
+            totalProfit: {
+              $sum: {
+                $multiply: [
+                  '$items.quantity',
+                  { $subtract: ['$items.price', { $ifNull: ['$mealData.cost', 0] }] }
+                ]
+              }
+            }
+          }
+        }
+      ]);
+      return result[0]?.totalProfit || 0;
+    };
+
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+
+    const totalRevenue = await calculateRevenue(dateQuery);
+    const todayRevenue = await calculateRevenue({ createdAt: { $gte: today } });
+    const monthRevenue = await calculateRevenue({ createdAt: { $gte: startOfMonth } });
+
+    const totalProfit = await calculateProfit(dateQuery);
+    const todayProfit = await calculateProfit({ createdAt: { $gte: today } });
+    const monthProfit = await calculateProfit({ createdAt: { $gte: startOfMonth } });
+
     const totalMeals = await Meal.countDocuments();
     const activeMeals = await Meal.countDocuments({ isAvailable: true });
 
@@ -724,7 +913,12 @@ export const getDashboardStats = async (req, res) => {
           pending: pendingOrders
         },
         revenue: {
-          total: revenueStats[0]?.totalRevenue || 0
+          total: totalRevenue,
+          todayRevenue,
+          monthRevenue,
+          profit: totalProfit,
+          todayProfit,
+          monthProfit
         },
         meals: {
           total: totalMeals,
@@ -737,6 +931,59 @@ export const getDashboardStats = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error fetching dashboard statistics'
+    });
+  }
+};
+
+export const getAllOrders = async (req, res) => {
+  try {
+    const { status, date, studentId, page = 1, limit = 50 } = req.query;
+
+    let query = {};
+
+    if (status) {
+      query.status = status;
+    }
+
+    if (studentId) {
+      query.student = studentId;
+    }
+
+    if (date) {
+      const startOfDay = new Date(date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(date);
+      endOfDay.setHours(23, 59, 59, 999);
+
+      query.pickupTimeSlot = {
+        $gte: startOfDay,
+        $lte: endOfDay
+      };
+    }
+
+    const orders = await Order.find(query)
+      .populate('student', 'name email studentId')
+      .populate('items.meal', 'name category')
+      .populate('collectedBy', 'name email')
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .lean();
+
+    const count = await Order.countDocuments(query);
+
+    res.json({
+      success: true,
+      data: orders,
+      totalPages: Math.ceil(count / limit),
+      currentPage: page,
+      total: count
+    });
+  } catch (error) {
+    console.error('Error getting orders:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching orders'
     });
   }
 };

@@ -11,7 +11,7 @@ const createOrder = asyncHandler(async (req, res) => {
   console.log('req.body:', JSON.stringify(req.body, null, 2));
   console.log('req.user:', req.user);
 
-  const { items, pickupTimeSlot, paymentMethod, specialInstructions } = req.body;
+  const { items, pickupTimeSlot, paymentMethod = 'cash_on_delivery', specialInstructions } = req.body;
 
   if (!items || items.length === 0) {
     throw new ErrorResponse('Please add items to your order', 400);
@@ -72,6 +72,9 @@ const createOrder = asyncHandler(async (req, res) => {
     totalCarbs += meal.nutritionalInfo.carbohydrates * quantity;
   }
 
+  // Fix floating point precision issues (e.g. 19.99 * 3)
+  totalPrice = Math.round(totalPrice * 100) / 100;
+
   // Parse pickup time (if provided)
   let pickupStart = null;
   let pickupEnd = null;
@@ -89,11 +92,22 @@ const createOrder = asyncHandler(async (req, res) => {
   }
 
   // Validate payment method
-  const wallet = user.wallet;
+  let wallet = user.wallet;
 
   if (paymentMethod === 'wallet') {
-    if (!wallet || !wallet.canAfford(totalPrice)) {
-      throw new ErrorResponse('Insufficient wallet balance', 400);
+    if (!wallet) {
+      wallet = await Wallet.findOne({ user: user._id });
+      if (!wallet) {
+        wallet = await Wallet.create({ user: user._id, balance: 0 });
+        await User.findByIdAndUpdate(user._id, { wallet: wallet._id });
+      }
+    }
+
+    if (!wallet) {
+      throw new ErrorResponse('Wallet not found', 404);
+    }
+    if (wallet.balance < totalPrice) {
+      throw new ErrorResponse(`Insufficient wallet balance. Available: ${wallet.balance.toFixed(2)} DH, Required: ${totalPrice.toFixed(2)} DH`, 400);
     }
   }
 
@@ -152,49 +166,55 @@ const createOrder = asyncHandler(async (req, res) => {
 
   // Process payment if wallet
   if (paymentMethod === 'wallet') {
-    await wallet.deductFunds(totalPrice);
-    order.paymentStatus = 'paid';
-    await order.save();
-
-    // Create transaction record
-    await Transaction.create({
-      wallet: wallet._id,
-      user: user._id,
-      type: 'debit',
-      amount: totalPrice,
-      description: `Order ${order.orderNumber}`,
-      order: order._id,
-      paymentMethod: 'wallet',
-      balanceAfter: wallet.balance
-    });
-
-    // Update user's monthly spending
-    user.currentMonthSpent += totalPrice;
-    await user.save();
-
-    // Update wellness tracking immediately for paid orders
     try {
-      console.log(`🔄 Processing wellness tracking for new paid order ${order._id}`);
-      const tracking = await WellnessTracking.getTodayTracking(user._id);
-
-      console.log(`📈 Before update - Daily: ${tracking.dailyCalories} cal, ${tracking.dailyProteins}g protein, ${tracking.dailySpent} DH`);
-
-      await tracking.addOrderStats(
-        order.totalCalories || 0,
-        order.totalProteins || 0,
-        order.totalCarbs || 0,
-        order.totalPrice || 0
-      );
-
-      order.wellnessProcessed = true;
+      await wallet.deductFunds(totalPrice);
+      order.paymentStatus = 'paid';
       await order.save();
 
-      const updatedTracking = await WellnessTracking.findById(tracking._id);
-      console.log(`📊 After update - Daily: ${updatedTracking.dailyCalories} cal, ${updatedTracking.dailyProteins}g protein, ${updatedTracking.dailySpent} DH`);
-      console.log(`✅ Updated wellness tracking for paid order ${order._id}`);
+      // Create transaction record
+      await Transaction.create({
+        wallet: wallet._id,
+        user: user._id,
+        type: 'debit',
+        amount: totalPrice,
+        description: `Order ${order.orderNumber}`,
+        order: order._id,
+        paymentMethod: 'wallet',
+        balanceAfter: wallet.balance
+      });
+
+      // Update user's monthly spending
+      user.currentMonthSpent += totalPrice;
+      await user.save();
+
+      // Update wellness tracking immediately for paid orders
+      try {
+        console.log(`🔄 Processing wellness tracking for new paid order ${order._id}`);
+        const tracking = await WellnessTracking.getTodayTracking(user._id);
+
+        console.log(`📈 Before update - Daily: ${tracking.dailyCalories} cal, ${tracking.dailyProteins}g protein, ${tracking.dailySpent} DH`);
+
+        await tracking.addOrderStats(
+          order.totalCalories || 0,
+          order.totalProteins || 0,
+          order.totalCarbs || 0,
+          order.totalPrice || 0
+        );
+
+        order.wellnessProcessed = true;
+        await order.save();
+
+        const updatedTracking = await WellnessTracking.findById(tracking._id);
+        console.log(`📊 After update - Daily: ${updatedTracking.dailyCalories} cal, ${updatedTracking.dailyProteins}g protein, ${updatedTracking.dailySpent} DH`);
+        console.log(`✅ Updated wellness tracking for paid order ${order._id}`);
+      } catch (error) {
+        console.error(`❌ Error updating wellness tracking for new order ${order._id}:`, error);
+        // Don't fail the order creation if wellness tracking fails
+      }
     } catch (error) {
-      console.error(`❌ Error updating wellness tracking for new order ${order._id}:`, error);
-      // Don't fail the order creation if wellness tracking fails
+      // If payment fails, delete the order so it doesn't stay in pending state
+      await order.deleteOne();
+      throw new ErrorResponse('Payment failed: ' + error.message, 400);
     }
   }
 

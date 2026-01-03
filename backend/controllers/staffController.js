@@ -1,4 +1,5 @@
-import { Order, User, Wallet, WalletTransaction, UserReport } from '../models/index.js';
+import mongoose from 'mongoose';
+import { Order, User, Wallet, WalletTransaction, UserReport, WellnessTracking } from '../models/index.js';
 
 // ============================================
 // ORDER MANAGEMENT
@@ -137,6 +138,70 @@ export const updateOrderStatus = async (req, res) => {
     res.status(500).json({
       success: false,
       message: 'Error updating order status'
+    });
+  }
+};
+
+// Update payment status
+export const updatePaymentStatus = async (req, res) => {
+  try {
+    const { paymentStatus } = req.body;
+    const orderId = req.params.id;
+
+    // Validate status
+    const validStatuses = ['pending', 'paid', 'refunded'];
+    if (!validStatuses.includes(paymentStatus)) {
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid payment status'
+      });
+    }
+
+    const order = await Order.findById(orderId).populate('student');
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: 'Order not found'
+      });
+    }
+
+    // Update status
+    order.paymentStatus = paymentStatus;
+
+    // If marked as paid, update wellness tracking if not already processed
+    if (paymentStatus === 'paid' && !order.wellnessProcessed) {
+      try {
+        const userId = order.student._id || order.student;
+        const tracking = await WellnessTracking.getTodayTracking(userId);
+        
+        await tracking.addOrderStats(
+          order.totalCalories || 0,
+          order.totalProteins || 0,
+          order.totalCarbs || 0,
+          order.totalPrice || 0
+        );
+        
+        order.wellnessProcessed = true;
+      } catch (error) {
+        console.error(`Error updating wellness tracking:`, error);
+      }
+    }
+
+    await order.save();
+
+    console.log(`✅ Order ${order.orderNumber} payment status updated to ${paymentStatus} by ${req.user.email}`);
+
+    res.json({
+      success: true,
+      message: 'Payment status updated successfully',
+      data: order
+    });
+  } catch (error) {
+    console.error('Error updating payment status:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating payment status'
     });
   }
 };
@@ -292,7 +357,13 @@ export const chargeWallet = async (req, res) => {
     }
 
     // Get student
-    const student = await User.findById(studentId);
+    let student;
+    if (mongoose.Types.ObjectId.isValid(studentId)) {
+      student = await User.findById(studentId);
+    } else {
+      student = await User.findOne({ email: studentId });
+    }
+
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -310,9 +381,13 @@ export const chargeWallet = async (req, res) => {
     }
 
     // Get or create wallet
-    let wallet = await Wallet.findOne({ user: studentId });
+    let wallet = await Wallet.findOne({ user: student._id });
     if (!wallet) {
-      wallet = await Wallet.create({ user: studentId, balance: 0 });
+      wallet = await Wallet.create({ user: student._id, balance: 0 });
+      await User.findByIdAndUpdate(student._id, { wallet: wallet._id });
+    } else if (!student.wallet) {
+      // Ensure wallet is linked to user if it exists but link is missing
+      await User.findByIdAndUpdate(student._id, { wallet: wallet._id });
     }
 
     // Add funds to wallet
@@ -321,7 +396,7 @@ export const chargeWallet = async (req, res) => {
 
     // Create transaction record
     const transaction = await WalletTransaction.create({
-      user: studentId,
+      user: student._id,
       wallet: wallet._id,
       type: 'charge',
       amount: amount,
@@ -366,6 +441,7 @@ export const searchStudents = async (req, res) => {
       });
     }
 
+    // Find students matching criteria
     const students = await User.find({
       role: 'student',
       $or: [
@@ -375,13 +451,24 @@ export const searchStudents = async (req, res) => {
       ]
     })
       .select('name email studentId isSuspended')
-      .populate('wallet', 'balance')
       .limit(20)
       .lean();
 
+    // Manually fetch wallets to ensure accuracy
+    const studentIds = students.map(s => s._id);
+    const wallets = await Wallet.find({ user: { $in: studentIds } });
+    
+    const studentsWithWallet = students.map(student => {
+      const wallet = wallets.find(w => w.user.toString() === student._id.toString());
+      return {
+        ...student,
+        wallet: wallet ? { balance: wallet.balance } : { balance: 0 }
+      };
+    });
+
     res.json({
       success: true,
-      data: students
+      data: studentsWithWallet
     });
   } catch (error) {
     console.error('Error searching students:', error);

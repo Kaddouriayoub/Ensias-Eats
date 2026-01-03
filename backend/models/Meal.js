@@ -99,12 +99,6 @@ const mealSchema = new mongoose.Schema({
     default: null
   },
 
-  // Tags for recommendation system
-  tags: {
-    type: [String],
-    default: []
-  },
-
   // Dietary information
   dietary: {
     isVegetarian: { type: Boolean, default: false },

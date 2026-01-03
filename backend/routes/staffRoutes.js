@@ -4,6 +4,7 @@ import {
   getAllOrders,
   getOrderDetails,
   updateOrderStatus,
+  updatePaymentStatus,
   markOrderCollected,
   cancelOrder,
   getTodayStats,
@@ -40,6 +41,7 @@ router.get('/stats/today', getTodayStats);
 router.get('/orders', getAllOrders);
 router.get('/orders/:id', getOrderDetails);
 router.put('/orders/:id/status', updateOrderStatus);
+router.put('/orders/:id/payment-status', updatePaymentStatus);
 router.put('/orders/:id/collect', markOrderCollected);
 router.put('/orders/:id/cancel', cancelOrder);
 
